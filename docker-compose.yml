@@ -1,0 +1,19 @@
+version: "3.9"
+services:
+  chaos:
+    image: test-server
+    ports:
+      - "80:80"
+    depends_on:
+      - mongo
+  mongo:
+    image: mongo:4.4
+    env_file:
+      - env
+    ports:
+      - 27017:27017
+    volumes:
+      - ./db:/data/db
+    networks:
+      - default
+
