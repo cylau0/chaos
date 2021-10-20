@@ -18,16 +18,18 @@ const (
 )
 
 type PollService struct {
-	scheduler  *gocron.Scheduler
-	errChannel chan error
-	msgChannel chan primitive.ObjectID
+	scheduler	*gocron.Scheduler
+	errChannel	chan error
+	msgChannel	chan primitive.ObjectID
+	mc			*MongoClient
 }
 
-func NewPollService() *PollService {
+func NewPollService(mc *MongoClient) *PollService {
 	return &PollService{
 		scheduler:	gocron.NewScheduler(time.UTC),
 		errChannel:	make(chan error),
 		msgChannel:	make(chan primitive.ObjectID),
+		mc:			mc,
 	}
 }
 
@@ -56,11 +58,9 @@ func (p *PollService) pollURL() {
 		return
 	}
 
-	mc := NewMongoClient(10 * time.Second)
-
 	for i := 0; i < len(tkts); i++ {
 		tkts[i].Timestamp = ts
-		id, err := mc.InsertOne(tkts[i])
+		id, err := p.mc.InsertOne(tkts[i])
 		if err != nil { p.errChannel <- err ; continue }
 		p.msgChannel <- id
 	}

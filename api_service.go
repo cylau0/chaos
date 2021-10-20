@@ -10,32 +10,33 @@ import (
 )
 
 type APIService struct {
-	router *chi.Mux
+	router	*chi.Mux
+	mc		*MongoClient
 }
 
-func NewAPIService() *APIService {
+func NewAPIService(mc *MongoClient) *APIService {
 	// Prepare Router
-	return &APIService{router: chi.NewRouter()}
+	return &APIService{router: chi.NewRouter(), mc: mc,}
 }
 
-func (r *APIService) Serve() {
-	r.router.Use(middleware.Logger)
+func (api *APIService) Serve() {
+	api.router.Use(middleware.Logger)
 
-	r.router.Get("/", func(w http.ResponseWriter, r *http.Request) {
+	api.router.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("hi"))
 	})
 
     // "/price" resource
-	r.router.Route("/price", func(rr chi.Router) {
+	api.router.Route("/price", func(r chi.Router) {
 		// GET /price 
-		rr.With(paginate).Get("/", getLatestPrice)
+		r.With(paginate).Get("/", api.getLatestPrice)
 
 		// GET /articles/2021-01-09T12:34:56
-		rr.With(paginate).Get("/{year:[0-9]+}-{month:[0-9]+}-{day:[0-9]+}T{hour:[0-9]+}:{minute:[0-9]+}:{second:[0-9]+}", getPriceByTimestamp) 
+		r.With(paginate).Get("/{year:[0-9]+}-{month:[0-9]+}-{day:[0-9]+}T{hour:[0-9]+}:{minute:[0-9]+}:{second:[0-9]+}", api.getPriceByTimestamp) 
     })
 
-    r.router.Get("/average", getAveragePrice)
-	http.ListenAndServe(":80", r.router)
+    api.router.Get("/average", api.getAveragePrice)
+	http.ListenAndServe(":80", api.router)
 }
 
 type averagePrice struct{
@@ -71,17 +72,15 @@ func paginate(next http.Handler) http.Handler {
 
 var errInternalServerError = &ErrResponse{HTTPStatusCode: 500, StatusText: "Internal Server Error."}
 
-func getLatestPrice(w http.ResponseWriter, r *http.Request) {
-    mc := NewMongoClient(10 * time.Second)
-
-	price, ts, err := mc.GetLatestPrice()
+func (api *APIService) getLatestPrice(w http.ResponseWriter, r *http.Request) {
+	price, ts, err := api.mc.GetLatestPrice()
     if err != nil {
 		render.Respond(w, r, errInternalServerError)
 	}
 	render.JSON(w, r, &priceResponse{TimeStamp: ts, Price: price})
 }
 
-func getPriceByTimestamp(w http.ResponseWriter, r *http.Request) {
+func (api *APIService) getPriceByTimestamp(w http.ResponseWriter, r *http.Request) {
     // The regex should take care of it
 	year, _ := strconv.Atoi(chi.URLParam(r, "year"))
 	month, _ := strconv.Atoi(chi.URLParam(r, "month"))
@@ -93,9 +92,7 @@ func getPriceByTimestamp(w http.ResponseWriter, r *http.Request) {
     // Using timezone UTC right now for simplicity
     ts1 := time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC)
 
-    mc := NewMongoClient(10 * time.Second)
-
-	price, err := mc.GetPriceByTimestamp(ts1)
+	price, err := api.mc.GetPriceByTimestamp(ts1)
     if err != nil {
         render.Respond(w, r, errInternalServerError)
 		return
@@ -104,7 +101,7 @@ func getPriceByTimestamp(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, &priceResponse{TimeStamp: ts1, Price: price})
 }
 
-func getAveragePrice(w http.ResponseWriter, r *http.Request) {
+func (api *APIService) getAveragePrice(w http.ResponseWriter, r *http.Request) {
     //command in mongodb console
 
 	fromStr := r.FormValue("from")
@@ -127,9 +124,7 @@ func getAveragePrice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-    mc := NewMongoClient(10 * time.Second)
-
-	price, err := mc.GetAveragePrice(from, to)
+	price, err := api.mc.GetAveragePrice(from, to)
     if err != nil {
         render.Respond(w, r, errInternalServerError)
 		return
