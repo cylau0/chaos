@@ -52,13 +52,13 @@ func (m *MongoClient) Close() {
 	m.mc = nil
 }
 
-func (m *MongoClient) InsertOne(o interface{}) ( primitive.ObjectID, error ) {
+func (m *MongoClient) InsertOne(o interface{}) ( string, error ) {
 
     cancel, err := m.Connect()
 	defer cancel()
 
 	if err != nil {
-		return primitive.NilObjectID, err
+		return "", err
 	}
     defer m.Close()
 
@@ -67,9 +67,9 @@ func (m *MongoClient) InsertOne(o interface{}) ( primitive.ObjectID, error ) {
 
     res, err := col.InsertOne(m.ctx, bsonBytes)
     if err != nil {
-		return primitive.NilObjectID, err
+		return "", err
 	}
-	return res.InsertedID.(primitive.ObjectID), nil
+	return res.InsertedID.(primitive.ObjectID).Hex(), nil
 }
 
 func unmarshalTicker(cur *mongo.Cursor) (*Ticker, error) {

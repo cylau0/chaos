@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"encoding/json"
 	"github.com/go-co-op/gocron"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 
 )
 const (
@@ -20,7 +19,7 @@ const (
 type PollService struct {
 	scheduler	*gocron.Scheduler
 	errChannel	chan error
-	msgChannel	chan primitive.ObjectID
+	msgChannel	chan string
 	mc			*MongoClient
 }
 
@@ -28,7 +27,7 @@ func NewPollService(mc *MongoClient) *PollService {
 	return &PollService{
 		scheduler:	gocron.NewScheduler(time.UTC),
 		errChannel:	make(chan error),
-		msgChannel:	make(chan primitive.ObjectID),
+		msgChannel:	make(chan string),
 		mc:			mc,
 	}
 }
@@ -81,7 +80,7 @@ func (p *PollService) Loop() {
 				}
 			// here comes the created object in mongodb
 			case id := <- p.msgChannel:
-				log.Println("Record created : " + id.Hex())
+				log.Println("Record created : " + id)
 		}
 	}
 }
