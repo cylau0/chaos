@@ -4,8 +4,7 @@ import (
 	"time"
 )
 
-func main() {
-	mc := NewMongoStorage(10 * time.Second)
+func main_impl(mc DataStorage) {
 	s := NewPollService(mc)
 	s.Start()
 	go s.Loop()
@@ -13,4 +12,9 @@ func main() {
 	r := NewAPIService(mc)
 	r.Serve()
 
+}
+
+func main() {
+	mc := NewMongoStorage(10 * time.Second)
+	main_impl(mc)
 }

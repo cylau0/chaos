@@ -1,58 +1,35 @@
 package main
 
 import (
+	"fmt"
 	"time"
 	"context"
-	"github.com/hashicorp/go-memdb"
+	"github.com/emirpasic/gods/trees/redblacktree"
+	"github.com/emirpasic/gods/utils"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 
 type MemoryStorage struct {
+	db map[string]*MTicker
+	tree *redblacktree.Tree
 	timeout	time.Duration
-	ctx		context.Context
-	db		*memdb.MemDB
 }
 
 
-func NewMemoryStorage(timeout time.Duration) (*MemoryStorage, error) {
-	schema := &memdb.DBSchema{
-		Tables: map[string]*memdb.TableSchema{
-			"person": &memdb.TableSchema{
-				Name: "person",
-				Indexes: map[string]*memdb.IndexSchema{
-					"id": &memdb.IndexSchema{
-						Name:    "id",
-						Unique:  true,
-						Indexer: &memdb.StringFieldIndex{Field: "Email"},
-					},
-					"age": &memdb.IndexSchema{
-						Name:    "age",
-						Unique:  false,
-						Indexer: &memdb.IntFieldIndex{Field: "Age"},
-					},
-				},
-			},
-		},
-	}
-	db, err := memdb.NewMemDB(schema)
-	if err != nil {
-		return nil, err
-	}
-	return &MemoryStorage{db: db, timeout: timeout}, nil
+func NewMemoryStorage(timeout time.Duration) (*MemoryStorage) {
+	db := make(map[string]*MTicker)
+	tree := redblacktree.NewWith(utils.Int64Comparator)
+	return &MemoryStorage{db: db, tree: tree, timeout: timeout}
 }
 
 func (m *MemoryStorage) Connect() (context.CancelFunc, error) {
-    ctx, cancel := context.WithTimeout(context.Background(), m.timeout)
-	m.ctx = ctx
-	return cancel, nil
+	return nil , nil
 }
 
-func (m *MemoryStorage) Close() {
-	m.ctx = nil
-}
+func (m *MemoryStorage) Close() { }
 
 func (m *MemoryStorage) InsertOne(o interface{}) ( string, error ) {
-
     cancel, err := m.Connect()
 	defer cancel()
 
@@ -60,18 +37,14 @@ func (m *MemoryStorage) InsertOne(o interface{}) ( string, error ) {
 		return "", err
 	}
     defer m.Close()
-	return "TBFILL", nil
-/*
+	n := &MTicker{}
+	n.Ticker = o.(Ticker)
+	n.ID = primitive.NewObjectID().Hex()
+	n.TS = n.Timestamp.UnixMicro()
+	m.db[n.ID] = n
+	m.tree.Put(n.TS, n.ID)
 
-    col := m.mc.Database("local").Collection("rates")
-    bsonBytes, _ := bson.Marshal(o)
-
-    res, err := col.InsertOne(m.ctx, bsonBytes)
-    if err != nil {
-		return "", err
-	}
-	return res.InsertedID.(primitive.ObjectID).Hex(), nil
-*/
+	return n.ID, nil
 }
 
 
@@ -81,32 +54,15 @@ func (m *MemoryStorage) GetLatestPrice() (float64, time.Time, error) {
 	if err != nil {
 		return -1, time.Now(), err
 	}
-	return -1, time.Now(), nil
-/*
-    col := m.mc.Database("local").Collection("rates")
-
-    findOpts := options.Find()
-    findOpts.SetSort(bson.D{{"ts", -1}})
-    findOpts.SetLimit(1)
-
-    cur, err := col.Find(context.Background(), bson.D{}, findOpts)
-    if err != nil {
-		return -1, time.Now(), err
-	}
-
-    t, err := unmarshalTicker(cur)
-    if err != nil {
-		return -1, time.Now(), err
-	}
-
-    return t.Price, t.Timestamp, nil
-*/
+	values := m.tree.Values()
+	ID := values[len(values)-1].(string)
+	t := m.db[ID]
+	return t.Price, t.Timestamp, nil
 }
 
 
 
 func (m *MemoryStorage) GetPriceByTimestamp(ts1 time.Time) (float64, error) {
-    //ts2 := ts1.Add(1 * time.Second)
 
     cancel, err := m.Connect()
 	defer cancel()
@@ -114,77 +70,28 @@ func (m *MemoryStorage) GetPriceByTimestamp(ts1 time.Time) (float64, error) {
     if err != nil { 
 		return -1, err
 	}
+	keys := m.tree.Keys()
+	values := m.tree.Values()
+	TS := ts1.UnixMicro()
+
+	if TS < keys[0].(int64) || TS > keys[len(keys)-1].(int64) {
+		return -1 , fmt.Errorf("Price is out of the data range: time = " + ts1.String())
+	}
+
+	for i, t := range keys {
+		if TS == t.(int64) {
+			return m.db[values[i].(string)].Price, nil
+		}
+		if i == 0 {
+			continue
+		}
+		if TS < t.(int64) {
+			lt := m.db[values[i-1].(string)]
+			ut := m.db[values[i].(string)]
+    		return InterpolatePrice(lt.Timestamp, lt.Price, ut.Timestamp, ut.Price, ts1), nil
+		}
+	}
 	return -1, nil
-/*
-    col := m.mc.Database("local").Collection("rates")
-
-    findOpts := options.Find()
-    findOpts.SetLimit(1)
-
-    //run in mongo console
-    //db.rates.find({"from": "BTC", "to": "USD", "ts": {"$gte": ts1, "$lt":  ts2 }  })
-
-    // Search by range for a particular second range
-    filter0 := bson.M{"from": "BTC", "to": "USD", "ts": bson.M{"$gte": ts1, "$lt": ts2}}
-
-    cur, err := col.Find(context.Background(), filter0, findOpts)
-    if err != nil {
-		return -1, err
-	}
-    defer cur.Close(context.Background())
-
-    t0, err := unmarshalTicker(cur)
-
-	if err != nil {
-		return -1, err
-	}
-
-    if t0 != nil {
-        return t0.Price, nil
-    }
-    // If no exact result here, I try to intepolate between two enquiry
-    findOpts1 := options.Find()
-    findOpts1.SetSort(bson.D{{"ts", -1}})
-    findOpts1.SetLimit(1)
-    filter1 := bson.M{"from": "BTC", "to": "USD", "ts": bson.M{"$lt": ts1}}
-
-    findOpts2 := options.Find()
-    findOpts2.SetSort(bson.D{{"ts", 1}})
-    findOpts2.SetLimit(1)
-    filter2 := bson.M{"from": "BTC", "to": "USD", "ts": bson.M{"$gt": ts1}}
-
-    cur, err = col.Find(context.Background(), filter1, findOpts1)
-	if err != nil {
-		return -1, err
-	}
-
-    t1, err := unmarshalTicker(cur)
-	if err != nil {
-		return -1, err
-	}
-
-    cur, err = col.Find(context.Background(), filter2, findOpts2)
-	if err != nil {
-		return -1, err
-	}
-
-    t2, err := unmarshalTicker(cur)
-	if err != nil {
-		return -1, err
-	}
-
-    // If no earlier ticket is found
-    if t1 == nil {
-		return t2.Price, nil
-    }
-
-    if t2 == nil {
-		return t1.Price, nil
-    }
-
-    dur := float64(t2.Timestamp.Sub(t1.Timestamp))
-    return t1.Price * (float64(ts1.Sub(t1.Timestamp)) / dur ) +  t2.Price * (float64(t2.Timestamp.Sub(ts1)) / dur ), nil
-*/
 }
 
 func (m *MemoryStorage) GetAveragePrice(from, to time.Time) ( float64, error ) {
@@ -194,44 +101,64 @@ func (m *MemoryStorage) GetAveragePrice(from, to time.Time) ( float64, error ) {
     if err != nil { 
 		return -1, err
 	}
-	return -1, nil
-/*
-	ts_from := primitive.NewDateTimeFromTime(from)
-    ts_to := primitive.NewDateTimeFromTime(to)
-
-    cancel, err := m.Connect()
-	defer cancel()
-	if err != nil {
-		return -1, err
+	keys := m.tree.Keys()
+	values := m.tree.Values()
+	if from.UnixMicro() < keys[0].(int64) {
+		return -1 , fmt.Errorf("Price is out of the data range: from = " + from.String())
 	}
-    defer m.Close()
 
-    col := m.mc.Database("local").Collection("rates")
+	if to.UnixMicro() > keys[len(keys)-1].(int64) {
+		return -1 , fmt.Errorf("Price is out of the data range: to = " + to.String())
+	}
 
-    // MongoDB Console Command Example
-    // db.rates.aggregate( [ {$match: { from: "BTC", to: "USD", exchange: "Yobit", ts: { "$gte": ISODate("2021-10-18T17:03:52.647Z"), "$lte": ISODate("2021-10-19T17:03:52.647Z") } } }, { $group: { _id: null, price: { $avg: "$price" } } } ] )
+	var price_from, price_to float64
 
-    matchStage := bson.D{{"$match", bson.D{{"from", "BTC"}, {"to", "USD"}, {"ts", bson.D{{"$gte", ts_from}, {"$lte", ts_to}}}}}}
-    groupStage := bson.D{{"$group", bson.D{{"_id", nil}, {"price", bson.D{{"$avg", "$price"}}}}}}
+	TS_from := from.UnixMicro()
+	TS_to := to.UnixMicro()
+	
+    area_sum := float64(0.0)
+	started := false
+	for i, t := range keys {
+		if TS_from == t.(int64) {
+			if TS_from == TS_to {
+				return float64(0.0), nil
+			}
+			price_from = m.db[values[i].(string)].Price
+			started = true
+			continue
+		}
+		if i == 0 {
+			continue
+		}
+		lt := m.db[values[i-1].(string)]
+		ut := m.db[values[i].(string)]
 
-    cur, err := col.Aggregate(m.ctx, mongo.Pipeline{matchStage, groupStage})
-    if err != nil {
-        return -1, err
-    }
+		if TS_to == t.(int64) {
+			price_to = m.db[values[i].(string)].Price
+			area_sum += PriceTimeProductSum(lt.Timestamp, lt.Price, ut.Timestamp, ut.Price)
+			break
+		}
+		// Special Catering
+		if !started && TS_from < t.(int64) && TS_to < t.(int64) {
+    		price_from = InterpolatePrice(lt.Timestamp, lt.Price, ut.Timestamp, ut.Price, from)
+    		price_to = InterpolatePrice(lt.Timestamp, lt.Price, ut.Timestamp, ut.Price, to)
+			return PriceTimeProductSum(from, price_from, to, price_to), nil
+		}
+		if !started && TS_from < t.(int64) {
+    		price_from = InterpolatePrice(lt.Timestamp, lt.Price, ut.Timestamp, ut.Price, from)
+			area_sum += PriceTimeProductSum(from, price_from, ut.Timestamp, ut.Price)
+			started = true
+			continue
+		}
+		if started && TS_to < t.(int64) {
+    		price_to = InterpolatePrice(lt.Timestamp, lt.Price, ut.Timestamp, ut.Price, to)
+			area_sum += PriceTimeProductSum(lt.Timestamp, lt.Price, to, price_to)
+			break;
+		}
+		if started {
+			area_sum += PriceTimeProductSum(lt.Timestamp, lt.Price, ut.Timestamp, ut.Price)
+		}
+	}
 
-    var avgPrice averagePrice
-    for cur.Next(context.Background()) {
-        err := cur.Decode(&avgPrice)
-        if err != nil {
-			return -1, err
-        }
-        return avgPrice.Price, nil
-    }
-
-    if err := cur.Err(); err != nil {
-		return -1, err
-    }
-
-	return 0, nil
-*/
+	return area_sum / float64(to.Sub(from)), nil
 }

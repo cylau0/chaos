@@ -3,10 +3,10 @@ module github.com/cylau0/chaos
 go 1.17
 
 require (
+	github.com/emirpasic/gods v1.12.0
 	github.com/go-chi/chi/v5 v5.0.4
 	github.com/go-chi/render v1.0.1
 	github.com/go-co-op/gocron v1.9.0
-	github.com/hashicorp/go-memdb v1.3.2
 	github.com/stretchr/testify v1.7.0
 	go.mongodb.org/mongo-driver v1.7.3
 )
@@ -15,9 +15,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
-	github.com/hashicorp/go-immutable-radix v1.3.0 // indirect
-	github.com/hashicorp/go-uuid v1.0.1 // indirect
-	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/klauspost/compress v1.13.6 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
