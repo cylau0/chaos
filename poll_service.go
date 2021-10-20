@@ -6,11 +6,9 @@ import (
 	"os"
 	"io"
 	"log"
-	"context"
 	"net/http"
 	"encoding/json"
 	"github.com/go-co-op/gocron"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 )
@@ -58,21 +56,13 @@ func (p *PollService) pollURL() {
 		return
 	}
 
-	mc, err := getMongoClient(10)
-
-	if err != nil { p.errChannel <- err ; return }
-
-	col := mc.Database("local").Collection("rates")
+	mc := NewMongoClient(10 * time.Second)
 
 	for i := 0; i < len(tkts); i++ {
 		tkts[i].Timestamp = ts
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		bsonBytes, _ := bson.Marshal(tkts[i])
-		res, err := col.InsertOne(ctx, bsonBytes)
+		id, err := mc.InsertOne(tkts[i])
 		if err != nil { p.errChannel <- err ; continue }
-		id := res.InsertedID
-		p.msgChannel <- id.(primitive.ObjectID)
+		p.msgChannel <- id
 	}
 }
 
