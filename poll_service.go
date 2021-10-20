@@ -20,10 +20,10 @@ type PollService struct {
 	scheduler	*gocron.Scheduler
 	errChannel	chan error
 	msgChannel	chan string
-	mc			*MongoClient
+	mc			DataStorage
 }
 
-func NewPollService(mc *MongoClient) *PollService {
+func NewPollService(mc DataStorage) *PollService {
 	return &PollService{
 		scheduler:	gocron.NewScheduler(time.UTC),
 		errChannel:	make(chan error),

@@ -1,58 +1,57 @@
 package main
 
 import (
-	"os"
 	"time"
 	"context"
-    "go.mongodb.org/mongo-driver/mongo"
-    "go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"github.com/hashicorp/go-memdb"
 )
 
-const (
-    default_mongodb_url = "mongodb://localhost:27017"
-)
 
-type MongoClient struct {
-	db_url		string
-	db_timeout	time.Duration
-	ctx			context.Context
-	mc			*mongo.Client
+type MemoryStorage struct {
+	timeout	time.Duration
+	ctx		context.Context
+	db		*memdb.MemDB
 }
 
-func NewMongoClient(timeout time.Duration) (*MongoClient) {
-    db_url := os.Getenv("MONGODB_URL")
-    if db_url == "" {
-        db_url = default_mongodb_url
+
+func NewMemoryStorage(timeout time.Duration) (*MemoryStorage, error) {
+	schema := &memdb.DBSchema{
+		Tables: map[string]*memdb.TableSchema{
+			"person": &memdb.TableSchema{
+				Name: "person",
+				Indexes: map[string]*memdb.IndexSchema{
+					"id": &memdb.IndexSchema{
+						Name:    "id",
+						Unique:  true,
+						Indexer: &memdb.StringFieldIndex{Field: "Email"},
+					},
+					"age": &memdb.IndexSchema{
+						Name:    "age",
+						Unique:  false,
+						Indexer: &memdb.IntFieldIndex{Field: "Age"},
+					},
+				},
+			},
+		},
 	}
-
-	return &MongoClient{ db_url: db_url, db_timeout: timeout, mc: nil }
-}
-
-func (m *MongoClient) Connect() (context.CancelFunc, error) {
-    ctx, cancel := context.WithTimeout(context.Background(), m.db_timeout)
-	m.ctx = ctx
-
-    mc, err := mongo.Connect(m.ctx, options.Client().ApplyURI(m.db_url))
+	db, err := memdb.NewMemDB(schema)
 	if err != nil {
-		return cancel, err
+		return nil, err
 	}
-	m.mc = mc
+	return &MemoryStorage{db: db, timeout: timeout}, nil
+}
+
+func (m *MemoryStorage) Connect() (context.CancelFunc, error) {
+    ctx, cancel := context.WithTimeout(context.Background(), m.timeout)
+	m.ctx = ctx
 	return cancel, nil
 }
 
-func (m *MongoClient) Close() {
-	if m.ctx != nil {
-		if m.mc != nil {
-	    	m.mc.Disconnect(m.ctx)
-		}
-		m.ctx = nil
-	}
-	m.mc = nil
+func (m *MemoryStorage) Close() {
+	m.ctx = nil
 }
 
-func (m *MongoClient) InsertOne(o interface{}) ( string, error ) {
+func (m *MemoryStorage) InsertOne(o interface{}) ( string, error ) {
 
     cancel, err := m.Connect()
 	defer cancel()
@@ -61,6 +60,8 @@ func (m *MongoClient) InsertOne(o interface{}) ( string, error ) {
 		return "", err
 	}
     defer m.Close()
+	return "TBFILL", nil
+/*
 
     col := m.mc.Database("local").Collection("rates")
     bsonBytes, _ := bson.Marshal(o)
@@ -70,27 +71,18 @@ func (m *MongoClient) InsertOne(o interface{}) ( string, error ) {
 		return "", err
 	}
 	return res.InsertedID.(primitive.ObjectID).Hex(), nil
+*/
 }
 
-func unmarshalTicker(cur *mongo.Cursor) (*Ticker, error) {
-    var t Ticker
-    for cur.Next(context.Background()) {
-        err := cur.Decode(&t)
-        if err != nil { 
-			return nil, err
-		}
-        return &t, nil
-    }
-    if err := cur.Err(); err != nil {
-        return nil, err
-    }
-    return nil, nil
-}
 
-func (m *MongoClient) GetLatestPrice() (float64, time.Time, error) {
+func (m *MemoryStorage) GetLatestPrice() (float64, time.Time, error) {
     cancel, err := m.Connect()
 	defer cancel()
-
+	if err != nil {
+		return -1, time.Now(), err
+	}
+	return -1, time.Now(), nil
+/*
     col := m.mc.Database("local").Collection("rates")
 
     findOpts := options.Find()
@@ -108,12 +100,13 @@ func (m *MongoClient) GetLatestPrice() (float64, time.Time, error) {
 	}
 
     return t.Price, t.Timestamp, nil
+*/
 }
 
 
 
-func (m *MongoClient) GetPriceByTimestamp(ts1 time.Time) (float64, error) {
-    ts2 := ts1.Add(1 * time.Second)
+func (m *MemoryStorage) GetPriceByTimestamp(ts1 time.Time) (float64, error) {
+    //ts2 := ts1.Add(1 * time.Second)
 
     cancel, err := m.Connect()
 	defer cancel()
@@ -121,6 +114,8 @@ func (m *MongoClient) GetPriceByTimestamp(ts1 time.Time) (float64, error) {
     if err != nil { 
 		return -1, err
 	}
+	return -1, nil
+/*
     col := m.mc.Database("local").Collection("rates")
 
     findOpts := options.Find()
@@ -189,11 +184,18 @@ func (m *MongoClient) GetPriceByTimestamp(ts1 time.Time) (float64, error) {
 
     dur := float64(t2.Timestamp.Sub(t1.Timestamp))
     return t1.Price * (float64(ts1.Sub(t1.Timestamp)) / dur ) +  t2.Price * (float64(t2.Timestamp.Sub(ts1)) / dur ), nil
-
+*/
 }
 
-func (m *MongoClient) GetAveragePrice(from, to time.Time) ( float64, error ) {
+func (m *MemoryStorage) GetAveragePrice(from, to time.Time) ( float64, error ) {
 
+    cancel, err := m.Connect()
+	defer cancel()
+    if err != nil { 
+		return -1, err
+	}
+	return -1, nil
+/*
 	ts_from := primitive.NewDateTimeFromTime(from)
     ts_to := primitive.NewDateTimeFromTime(to)
 
@@ -231,21 +233,5 @@ func (m *MongoClient) GetAveragePrice(from, to time.Time) ( float64, error ) {
     }
 
 	return 0, nil
-}
-
-//func (m *MongoClient) Find(o interface{}) ( []interface{}, error ) {
-//}
-
-func getMongoClient(timeout time.Duration) (*mongo.Client, error) {
-    db_url := os.Getenv("MONGODB_URL")
-    if db_url == "" {
-        db_url = default_mongodb_url
-    }
-    ctx, cancel := context.WithTimeout(context.Background(), timeout * time.Second)
-    defer cancel()
-    mc, err := mongo.Connect(ctx, options.Client().ApplyURI(db_url))
-    if err != nil {
-        return nil, err
-    }
-    return mc, nil
+*/
 }

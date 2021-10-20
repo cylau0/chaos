@@ -11,10 +11,10 @@ import (
 
 type APIService struct {
 	router	*chi.Mux
-	mc		*MongoClient
+	mc		DataStorage
 }
 
-func NewAPIService(mc *MongoClient) *APIService {
+func NewAPIService(mc DataStorage) *APIService {
 	// Prepare Router
 	return &APIService{router: chi.NewRouter(), mc: mc,}
 }
@@ -126,10 +126,12 @@ func (api *APIService) getAveragePrice(w http.ResponseWriter, r *http.Request) {
 
 	price, err := api.mc.GetAveragePrice(from, to)
     if err != nil {
-        render.Respond(w, r, errInternalServerError)
+		if price < 0 {
+	        render.Respond(w, r, errInternalServerError)
+		}
+	    render.Respond(w, r, &ErrResponse{HTTPStatusCode: 400, StatusText: err.Error()})
 		return
     }
 
 	render.JSON(w, r, &averageResponse{ From: from, To: to, Price: price})
-
 }

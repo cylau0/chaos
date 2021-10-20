@@ -5,7 +5,7 @@ import (
 )
 
 func main() {
-	mc := NewMongoClient(10 * time.Second)
+	mc := NewMongoStorage(10 * time.Second)
 	s := NewPollService(mc)
 	s.Start()
 	go s.Loop()
