@@ -13,32 +13,25 @@ import (
 type MemoryStorage struct {
 	db map[string]*MTicker
 	tree *redblacktree.Tree
-	timeout	time.Duration
 }
 
 
-func NewMemoryStorage(timeout time.Duration) (*MemoryStorage) {
+func NewMemoryStorage() (*MemoryStorage) {
 	db := make(map[string]*MTicker)
 	tree := redblacktree.NewWith(utils.Int64Comparator)
-	return &MemoryStorage{db: db, tree: tree, timeout: timeout}
+	return &MemoryStorage{db: db, tree: tree}
 }
 
 func (m *MemoryStorage) Connect() (context.CancelFunc, error) {
-	return nil , nil
+	return func() {}, nil
 }
 
 func (m *MemoryStorage) Close() { }
 
 func (m *MemoryStorage) InsertOne(o interface{}) ( string, error ) {
-    cancel, err := m.Connect()
-	defer cancel()
-
-	if err != nil {
-		return "", err
-	}
-    defer m.Close()
 	n := &MTicker{}
 	n.Ticker = o.(Ticker)
+	n.Timestamp = n.Timestamp.UTC()
 	n.ID = primitive.NewObjectID().Hex()
 	n.TS = n.Timestamp.UnixMicro()
 	m.db[n.ID] = n
@@ -49,11 +42,6 @@ func (m *MemoryStorage) InsertOne(o interface{}) ( string, error ) {
 
 
 func (m *MemoryStorage) GetLatestPrice() (float64, time.Time, error) {
-    cancel, err := m.Connect()
-	defer cancel()
-	if err != nil {
-		return -1, time.Now(), err
-	}
 	values := m.tree.Values()
 	ID := values[len(values)-1].(string)
 	t := m.db[ID]
@@ -63,13 +51,6 @@ func (m *MemoryStorage) GetLatestPrice() (float64, time.Time, error) {
 
 
 func (m *MemoryStorage) GetPriceByTimestamp(ts1 time.Time) (float64, error) {
-
-    cancel, err := m.Connect()
-	defer cancel()
-
-    if err != nil { 
-		return -1, err
-	}
 	keys := m.tree.Keys()
 	values := m.tree.Values()
 	TS := ts1.UnixMicro()
@@ -95,12 +76,6 @@ func (m *MemoryStorage) GetPriceByTimestamp(ts1 time.Time) (float64, error) {
 }
 
 func (m *MemoryStorage) GetAveragePrice(from, to time.Time) ( float64, error ) {
-
-    cancel, err := m.Connect()
-	defer cancel()
-    if err != nil { 
-		return -1, err
-	}
 	keys := m.tree.Keys()
 	values := m.tree.Values()
 	if from.UnixMicro() < keys[0].(int64) {
