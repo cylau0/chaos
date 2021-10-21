@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"encoding/json"
 	"github.com/go-co-op/gocron"
-
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 const (
 	poll_url = "https://api.coinstats.app/public/v1/tickers?exchange=yobit&pair=BTC-USD"
@@ -59,6 +59,8 @@ func (p *PollService) pollURL() {
 
 	for i := 0; i < len(tkts); i++ {
 		tkts[i].Timestamp = ts
+		ID := primitive.NewObjectID()
+		tkts[i].ID = &ID
 		id, err := p.mc.InsertOne(tkts[i])
 		if err != nil { p.errChannel <- err ; continue }
 		p.msgChannel <- id

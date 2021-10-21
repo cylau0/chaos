@@ -224,7 +224,7 @@ func (m *MongoStorage) GetAveragePriceByWithInterpolation(from, to time.Time) ( 
 	}
 
 	if t_begin == nil {
-		err = fmt.Errorf("Price is out of the data range: time = " + from.String())
+		err = fmt.Errorf("Price is out of the data range: from = " + from.String())
 		log.Println(err)
 		return 0, err
     }
@@ -244,7 +244,7 @@ func (m *MongoStorage) GetAveragePriceByWithInterpolation(from, to time.Time) ( 
 		return -1, err
 	}
 	if t_end == nil {
-		err = fmt.Errorf("Price is out of the data range: time = " + to.String())
+		err = fmt.Errorf("Price is out of the data range: to = " + to.String())
 		log.Println(err)
 		return 0, err
     }
@@ -255,6 +255,15 @@ func (m *MongoStorage) GetAveragePriceByWithInterpolation(from, to time.Time) ( 
     findOpts.SetSort(bson.D{{"ts", 1}})
 
     filter := bson.M{"from": "BTC", "to": "USD", "ts": bson.M{"$gte": from, "$lte": to}}
+	keys := []int64{}
+	values := []string{}
+	db := make(map[string]*Ticker)
+
+	
+	keys = append(keys, t_begin.Timestamp.UnixMicro())
+	values = append(values, t_begin.ID.Hex())
+	t_begin.TS = t_begin.Timestamp.UnixMicro()
+	db[t_begin.ID.Hex()] = t_begin
 
     cur, err = col.Find(context.Background(), filter, findOpts)
 
@@ -262,30 +271,24 @@ func (m *MongoStorage) GetAveragePriceByWithInterpolation(from, to time.Time) ( 
 		log.Println(err)
 		return -1, err
 	}
+	var t Ticker
 
-    if err := cur.Err(); err != nil {
-		log.Println(err)
-		return -1, err
-    }
-    area_sum := float64(0.0)
-
-    var t, last_t Ticker
-    first := true
     for cur.Next(context.Background()) {
         err := cur.Decode(&t)
         if err != nil { 
 			log.Println(err)
 			return -1, err
 		}
-		if first {
-			first = false
-			price_from := InterpolatePrice(t_begin.Timestamp, t_begin.Price, t.Timestamp, t.Price, from)
-			area_sum += PriceTimeProductSum(from, price_from, t.Timestamp, t.Price)
-			last_t = t
+		if t.ID.Hex() == t_begin.ID.Hex() {
 			continue
 		}
-		area_sum += PriceTimeProductSum(last_t.Timestamp, last_t.Price, t.Timestamp, t.Price)
-		last_t = t
+		if t.ID.Hex() == t_end.ID.Hex() {
+			continue
+		}
+		keys = append(keys, t.Timestamp.UnixMicro())
+		values = append(values, t.ID.Hex())
+		t.TS = t.Timestamp.UnixMicro()
+		db[t.ID.Hex()] = &t
     }
 
     if err := cur.Err(); err != nil {
@@ -293,9 +296,11 @@ func (m *MongoStorage) GetAveragePriceByWithInterpolation(from, to time.Time) ( 
         return -1, err
     }
 
-	price_to := InterpolatePrice(t.Timestamp, t.Price, t_end.Timestamp, t_end.Price, to)
-	area_sum += PriceTimeProductSum(t.Timestamp, t.Price, to, price_to)
-	return area_sum / float64(to.Sub(from)), nil
+	keys = append(keys, t_end.Timestamp.UnixMicro())
+	values = append(values, t_end.ID.Hex())
+	t_end.TS = t_end.Timestamp.UnixMicro()
+	db[t_end.ID.Hex()] = &t
+	return CalculateAveragePrice(keys, values, db, from, to)
 }
 
 func (m *MongoStorage) GetAveragePriceByDBOperation(from, to time.Time) ( float64, error ) {

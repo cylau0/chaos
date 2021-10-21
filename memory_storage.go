@@ -11,13 +11,13 @@ import (
 
 
 type MemoryStorage struct {
-	db map[string]*MTicker
+	db map[string]*Ticker
 	tree *redblacktree.Tree
 }
 
 
 func NewMemoryStorage() (*MemoryStorage) {
-	db := make(map[string]*MTicker)
+	db := make(map[string]*Ticker)
 	tree := redblacktree.NewWith(utils.Int64Comparator)
 	return &MemoryStorage{db: db, tree: tree}
 }
@@ -29,15 +29,15 @@ func (m *MemoryStorage) Connect() (context.CancelFunc, error) {
 func (m *MemoryStorage) Close() { }
 
 func (m *MemoryStorage) InsertOne(o interface{}) ( string, error ) {
-	n := &MTicker{}
-	n.Ticker = o.(Ticker)
+	n := o.(Ticker)
 	n.Timestamp = n.Timestamp.UTC()
-	n.ID = primitive.NewObjectID().Hex()
+	ID := primitive.NewObjectID()
+	n.ID = &ID
 	n.TS = n.Timestamp.UnixMicro()
-	m.db[n.ID] = n
-	m.tree.Put(n.TS, n.ID)
+	m.db[n.ID.Hex()] = &n
+	m.tree.Put(n.TS, n.ID.Hex())
 
-	return n.ID, nil
+	return n.ID.Hex(), nil
 }
 
 
@@ -56,7 +56,7 @@ func (m *MemoryStorage) GetPriceByTimestamp(ts1 time.Time) (float64, error) {
 	TS := ts1.UnixMicro()
 
 	if TS < keys[0].(int64) || TS > keys[len(keys)-1].(int64) {
-		return -1 , fmt.Errorf("Price is out of the data range: time = " + ts1.String())
+		return -1 , fmt.Errorf("Price is out of the data range: from = " + ts1.String())
 	}
 
 	for i, t := range keys {
@@ -76,14 +76,25 @@ func (m *MemoryStorage) GetPriceByTimestamp(ts1 time.Time) (float64, error) {
 }
 
 func (m *MemoryStorage) GetAveragePrice(from, to time.Time) ( float64, error ) {
-	keys := m.tree.Keys()
-	values := m.tree.Values()
-	if from.UnixMicro() < keys[0].(int64) {
+	okeys := m.tree.Keys()
+	ovalues := m.tree.Values()
+	keys := []int64{}
+	values := []string{}
+	for _, v := range okeys {
+		keys = append(keys, v.(int64))
+	}
+
+	for _, v := range ovalues {
+		values = append(values, v.(string))
+	}
+
+	if from.UnixMicro() < keys[0] {
 		return -1 , fmt.Errorf("Price is out of the data range: from = " + from.String())
 	}
 
-	if to.UnixMicro() > keys[len(keys)-1].(int64) {
+	if to.UnixMicro() > keys[len(keys)-1] {
 		return -1 , fmt.Errorf("Price is out of the data range: to = " + to.String())
 	}
+	
 	return CalculateAveragePrice(keys, values, m.db, from, to)
 }
