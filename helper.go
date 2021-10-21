@@ -18,8 +18,8 @@ func PriceTimeProductSum(t1 time.Time, v1 float64, t2 time.Time, v2 float64) flo
 func CalculateAveragePrice(keys []int64, values []string, db map[string]*Ticker, from, to time.Time) ( float64, error ) {
 	var price_from, price_to float64
 
-	TS_from := from.UnixMicro()
-	TS_to := to.UnixMicro()
+	TS_from := from.UnixNano()
+	TS_to := to.UnixNano()
 	
     area_sum := float64(0.0)
 	started := false

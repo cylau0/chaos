@@ -33,7 +33,7 @@ func (m *MemoryStorage) InsertOne(o interface{}) ( string, error ) {
 	n.Timestamp = n.Timestamp.UTC()
 	ID := primitive.NewObjectID()
 	n.ID = &ID
-	n.TS = n.Timestamp.UnixMicro()
+	n.TS = n.Timestamp.UnixNano()
 	m.db[n.ID.Hex()] = &n
 	m.tree.Put(n.TS, n.ID.Hex())
 
@@ -53,7 +53,7 @@ func (m *MemoryStorage) GetLatestPrice() (float64, time.Time, error) {
 func (m *MemoryStorage) GetPriceByTimestamp(ts1 time.Time) (float64, error) {
 	keys := m.tree.Keys()
 	values := m.tree.Values()
-	TS := ts1.UnixMicro()
+	TS := ts1.UnixNano()
 
 	if TS < keys[0].(int64) || TS > keys[len(keys)-1].(int64) {
 		return -1 , fmt.Errorf("Price is out of the data range: from = " + ts1.String())
@@ -88,11 +88,11 @@ func (m *MemoryStorage) GetAveragePrice(from, to time.Time) ( float64, error ) {
 		values = append(values, v.(string))
 	}
 
-	if from.UnixMicro() < keys[0] {
+	if from.UnixNano() < keys[0] {
 		return -1 , fmt.Errorf("Price is out of the data range: from = " + from.String())
 	}
 
-	if to.UnixMicro() > keys[len(keys)-1] {
+	if to.UnixNano() > keys[len(keys)-1] {
 		return -1 , fmt.Errorf("Price is out of the data range: to = " + to.String())
 	}
 	

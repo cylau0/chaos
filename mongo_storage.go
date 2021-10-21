@@ -260,9 +260,9 @@ func (m *MongoStorage) GetAveragePriceByWithInterpolation(from, to time.Time) ( 
 	db := make(map[string]*Ticker)
 
 	
-	keys = append(keys, t_begin.Timestamp.UnixMicro())
+	keys = append(keys, t_begin.Timestamp.UnixNano())
 	values = append(values, t_begin.ID.Hex())
-	t_begin.TS = t_begin.Timestamp.UnixMicro()
+	t_begin.TS = t_begin.Timestamp.UnixNano()
 	db[t_begin.ID.Hex()] = t_begin
 
     cur, err = col.Find(context.Background(), filter, findOpts)
@@ -285,9 +285,9 @@ func (m *MongoStorage) GetAveragePriceByWithInterpolation(from, to time.Time) ( 
 		if t.ID.Hex() == t_end.ID.Hex() {
 			continue
 		}
-		keys = append(keys, t.Timestamp.UnixMicro())
+		keys = append(keys, t.Timestamp.UnixNano())
 		values = append(values, t.ID.Hex())
-		t.TS = t.Timestamp.UnixMicro()
+		t.TS = t.Timestamp.UnixNano()
 		db[t.ID.Hex()] = &t
     }
 
@@ -296,9 +296,9 @@ func (m *MongoStorage) GetAveragePriceByWithInterpolation(from, to time.Time) ( 
         return -1, err
     }
 
-	keys = append(keys, t_end.Timestamp.UnixMicro())
+	keys = append(keys, t_end.Timestamp.UnixNano())
 	values = append(values, t_end.ID.Hex())
-	t_end.TS = t_end.Timestamp.UnixMicro()
+	t_end.TS = t_end.Timestamp.UnixNano()
 	db[t_end.ID.Hex()] = &t
 	return CalculateAveragePrice(keys, values, db, from, to)
 }
