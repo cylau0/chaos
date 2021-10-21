@@ -5,38 +5,38 @@
 
 ### Arch Linux
 ```
-	pacman -Syu go docker git
-	systemctl enable docker
-	systemctl start docker
+pacman -Syu go docker git
+systemctl enable docker
+systemctl start docker
 ```  
 
 ### Fedora 34 Linux
 ```
-	dnf install golang moby-engine git
-	systemctl enable docker
-	systemctl start docker
+dnf install golang moby-engine git
+systemctl enable docker
+systemctl start docker
 	
 ```
 
 ## Compilation
 ### Build **chaos** binary
 ```
-	git clone https://github.com/cylau0/chaos
-	cd chaos
-	go mod tidy
-	go build
+git clone https://github.com/cylau0/chaos
+cd chaos
+go mod tidy
+go build
 ```
 
 ### Building a Docker Image
 ```
-	docker build -t test-server .
+docker build -t test-server .
 ```
 
 
 ## Prepare prepare a MongoDB server up and running, listing to 27017 port
 ```
-	mkdir -p ${HOME}/db
-	docker run -d -v ${HOME}/db:/data/db -p 27017:27017 mongo:4.4
+mkdir -p ${HOME}/db
+docker run -d -v ${HOME}/db:/data/db -p 27017:27017 mongo:4.4
 ```
 
 ## Running Server
@@ -44,26 +44,26 @@
 ### Running the the compiled binary **chaos**
  * Root privilege is required for the server listening on port 80
 ```
-	sudo ./chaos
+sudo ./chaos
 ```
 
 ### Running the Docker Image test-server
  * Prepare **env** file
 ```
-	DOCKER_NIC_IP=$(ip a show dev docker0 | grep inet | awk '{print $2}' | sed 's|/.*||')
-	echo MONGODB_URL=mongodb://${DOCKER_NIC_IP}:27017 > env
+DOCKER_NIC_IP=$(ip a show dev docker0 | grep inet | awk '{print $2}' | sed 's|/.*||')
+echo MONGODB_URL=mongodb://${DOCKER_NIC_IP}:27017 > env
 ```
 
  * Run the test-server image
 ```
-	docker run -d --rm -p 80:80 --env-file env test-server
+docker run -d --rm -p 80:80 --env-file env test-server
 ```	
 
 ## RestFul API Usage
 
 ### Enquiry Latest Price
 ```
-	curl http://localhost/price
+curl http://localhost/price
 ```
 
  * Sample Output
@@ -74,7 +74,7 @@
 ### Enquiry Price at **2021-10-21 18:47:00 UTC**
  * Linear Intepolation will be done from 2 consecutive sampling points containing the given Time
 ```
-	curl http://localhost/price/2021-10-21T18:47:00
+curl http://localhost/price/2021-10-21T18:47:00
 ```
 
  * Sample Output
@@ -85,7 +85,7 @@
 ### Enquiry Average Price Between  **2021-10-21 18:44:00 UTC** and **2021-10-21 18:47:00 UTC**
  * Linear Intepolation will be done if needed
 ```
-	curl 'http://localhost/average?from=2021-10-21T18:44:00&to=2021-10-21T18:47:00'
+curl 'http://localhost/average?from=2021-10-21T18:44:00&to=2021-10-21T18:47:00'
 ```
  * Sample Output, the Average Price 
 ```
@@ -95,7 +95,7 @@
 ## Run Test 
  * Run following command
 ```
-	go test
+go test
 ```
 
  * Sample output
