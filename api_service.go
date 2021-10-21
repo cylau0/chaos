@@ -19,7 +19,7 @@ func NewAPIService(mc DataStorage) *APIService {
 	return &APIService{router: chi.NewRouter(), mc: mc,}
 }
 
-func (api *APIService) Serve() {
+func (api *APIService) Serve(params ...interface{}) {
 	api.router.Use(middleware.Logger)
 
 	api.router.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -35,8 +35,13 @@ func (api *APIService) Serve() {
 		r.With(paginate).Get("/{year:[0-9]+}-{month:[0-9]+}-{day:[0-9]+}T{hour:[0-9]+}:{minute:[0-9]+}:{second:[0-9]+}", api.getPriceByTimestamp) 
     })
 
+	portStr := ":80"
+	if len(params) > 0 {
+		portStr = params[0].(string)
+	}
+
     api.router.Get("/average", api.getAveragePrice)
-	http.ListenAndServe(":80", api.router)
+	http.ListenAndServe(portStr, api.router)
 }
 
 type averagePrice struct{
