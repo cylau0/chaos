@@ -80,21 +80,41 @@ func (m *MemoryStorage) GetAveragePrice(from, to time.Time) ( float64, error ) {
 	ovalues := m.tree.Values()
 	keys := []int64{}
 	values := []string{}
-	for _, v := range okeys {
-		keys = append(keys, v.(int64))
+	var last_key int64
+	var last_value string
+	first := true
+	has_last := false
+	is_break := false
+	for i, v := range okeys {
+		key := v.(int64)
+		value := ovalues[i].(string)
+		if key <= from.UnixNano() {
+			has_last = true
+			last_key = key
+			last_value = value
+			continue
+		}
+		if (first) {
+			if !has_last {
+				return -1 , fmt.Errorf("Price is out of the data range: from = " + from.String())
+			}
+			first = false
+			keys = append(keys, last_key)
+			values = append(values, last_value)
+		}
+
+		keys = append(keys, key)
+		values = append(values, value)
+
+		if key >= to.UnixNano() {
+			is_break = true
+			break
+		}
 	}
 
-	for _, v := range ovalues {
-		values = append(values, v.(string))
-	}
-
-	if from.UnixNano() < keys[0] {
-		return -1 , fmt.Errorf("Price is out of the data range: from = " + from.String())
-	}
-
-	if to.UnixNano() > keys[len(keys)-1] {
+    if !is_break {
 		return -1 , fmt.Errorf("Price is out of the data range: to = " + to.String())
 	}
-	
+
 	return CalculateAveragePrice(keys, values, m.db, from, to)
 }
